@@ -28,7 +28,7 @@ def build_rag_chain():
             "You are a helpful assistant for question answering. "
             "Answer the user's question only from the provided context. "
             "If the answer is not in the context, say you don't know. "
-            "Keep the answer clear and concise.\n\n"
+            "After the answer, rely only on the retrieved context.\n\n"
             "Context:\n{context}"
         ),
         ("human", "{input}")
@@ -43,12 +43,33 @@ def build_rag_chain():
 def ask_question(query: str):
     rag_chain = build_rag_chain()
     response = rag_chain.invoke({"input": query})
-    return response
+
+    answer = response["answer"]
+    source_docs = response.get("context", [])
+
+    citations = []
+    for doc in source_docs:
+        source = doc.metadata.get("source", "unknown_page")
+        page = doc.metadata.get("page", "unknown_page")
+        citations.append({
+            "source" : source,
+            "page" : page
+        })
+
+    return {
+        "question": query ,
+        "answer" : answer,
+        "citations": citations,
+        "source_docs": source_docs
+    }
 
 
 if __name__ == "__main__":
-    query = "what is rag and why to use it?"
+    query = "explain transformers?,what is RAG?"
     response = ask_question(query)
 
-    print("\nQUESTION:\n", query)
+    print("\nQUESTION:\n", response["question"])
     print("\nANSWER:\n", response["answer"])
+    print("\nCITATIONS:")
+    for c in response["citations"]:
+        print(f"- {c['source']}  | page {c["page"]}")
