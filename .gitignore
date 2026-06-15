@@ -8,3 +8,4 @@ indexes/
 data/*.pdf
 .ipynb_checkpoints/
 *.py[cod]
+.vscode/
