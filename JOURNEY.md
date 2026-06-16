@@ -1,4 +1,4 @@
-# PaperMind — Learning Journey
+# PaperMind — Journey
 
 This document explains how i am building PaperMind from a 
 naive basic RAG pipeline to a tool-augmented agent, and why 
