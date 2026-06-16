@@ -2,6 +2,8 @@
 
 PAPERMIND is a personal **Research Paper Assistant** built to learn Retrieval-Augmented Generation (RAG). It loads a PDF, splits it into chunks, converts those chunks into embeddings, stores them in a FAISS vector index, retrieves relevant context for a question, and generates grounded answers with source citations.
 
+** refer to `journey.md` and tags for versions**
+
 ## What it does
 
 - Loads a PDF using `PyPDFLoader`
