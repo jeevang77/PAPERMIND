@@ -1,4 +1,4 @@
-import os 
+import os
 import json
 from groq import Groq
 from dotenv import load_dotenv
@@ -6,133 +6,152 @@ from retrieve import load_faiss
 
 load_dotenv()
 
-## setup 
+# ── Setup ────────────────────────────────────────────────────────
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 vector_store = load_faiss()
 
-## Tool schema
-
+# ── Tool schema ──────────────────────────────────────────────────
 tools = [
     {
-        "type" : "function",
-        "function" : {
-            "name" : "search_paper",
-            "description" : ("search for papers for relevant information."
-                            "Call this when you need answers to questions about the paper content.") ,
-            "parameters" : {
-                "type" : "object",
-                "properties" : {
-                    "query" : {"type" : "string", "description": "The search query to find relevant chunks"}
+        "type": "function",
+        "function": {
+            "name": "search_paper",
+            "description": (
+                "Search the research paper for relevant information. "
+                "Call this when the question is about the paper content."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query to find relevant chunks"
+                    }
                 },
-                "required" : ["query"]
-            }  
-
+                "required": ["query"]
+            }
         }
     }
-
 ]
 
-## tool actual function
-
+# ── Actual function ──────────────────────────────────────────────
 def search_paper(query: str) -> str:
     results = vector_store.similarity_search(query, k=3)
-    if not results :
+    if not results:
         return "No relevant information found in the paper."
 
     context = ""
-    for i , doc in enumerate(results , start=1):
+    for i, doc in enumerate(results, start=1):
         page = doc.metadata.get("page", "unknown")
-        context += f"\n[chunk{i}  | Page {page}] : \n{doc.page_content}\n"
+        context += f"\n[Chunk {i} | Page {page}]:\n{doc.page_content}\n"
     return context
 
-
-
-# Agent Function
-
+# ── Agent function ───────────────────────────────────────────────
 def ask_agent(question: str) -> str:
-    print(f"\nQuestion : {question}")
-    print("-" * 25)
+    print(f"\nQuestion: {question}")
+    print("-" * 50)
 
     messages = [
-        {"role" : "system", "content" : (
-            "You are a helpful research paper assitant. "
-            "You have access to search_paper tool that searches an indexed papers."
-            "if tool returns no relevant information, respond with: I could not find relevant information about this in the paper, \nanswer them directly."
-            "Only answer directly WITHOUT the tool for completely unrelated questions."
-            "Always cite page numbers when using tool results."
-        ) 
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful research paper assistant. "
+                "You have access to a search_paper tool that searches an indexed research paper. "
+                "ALWAYS use the search_paper tool when the question is related to: "
+                "RAG, embeddings, transformers, LLMs, fine-tuning, chunking, "
+                "vector databases, or any technical topic that might be in the paper. "
+                "If the tool returns no relevant information, say: "
+                "'I could not find relevant information about this in the paper.' "
+                "Only answer directly WITHOUT the tool for completely unrelated questions "
+                "like math calculations or everyday questions. "
+                "Always cite page numbers when using tool results."
+            )
         },
         {
-            "role" : "user",
-            "content" : question
+            "role": "user",
+            "content": question
         }
     ]
 
     try:
-        # send to model
+        # Turn 1: send to model
         response = client.chat.completions.create(
-            model = MODEL,
-            messages = messages,
-            tools = tools,
-            tool_choice = "auto"
-                
+            model=MODEL,
+            messages=messages,
+            tools=tools,
+            tool_choice="auto"
         )
 
         response_message = response.choices[0].message
         tool_calls = response_message.tool_calls
 
-        # checking if model wants to call a tool
         if tool_calls:
-            messages.append(response_message)
+            clean_message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                    }
+                    for tc in tool_calls
+                ]
+            }
+            messages.append(clean_message)
 
-            for tool_call in tool_calls :
+            tool_result = ""
+            for tool_call in tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
 
+                print(f"Tool called: {function_name}")
+                print(f"Query sent to tool: {function_args}")
+
                 if function_name == "search_paper":
-                    tool_result = search_paper(query = function_args.get("query"))
-                    print(f" Tool called: {function_name}")
-                    print(f"Query sent to tool : {function_args}")                
-                    print(f" Retrived context preview : {tool_result[:500]}....")
+                    tool_result = search_paper(
+                        query=function_args.get("query")
+                    )
+                    if "No relevant information" in tool_result:
+                        tool_result = "The paper does not contain relevant information about this topic."
+                    print(f"Retrieved context preview: {tool_result[:300]}...")
 
                 messages.append({
-                    "tool_call_id" : tool_call.id,
-                    "role" : "tool",
-                    "name" : function_name,
-                    "content" : tool_result
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": tool_result
                 })
 
-            # get final response 
+            # Turn 2: get final answer
             final_response = client.chat.completions.create(
-                model = MODEL,
-                messages= messages        
+                model=MODEL,
+                messages=messages
             )
-
             return final_response.choices[0].message.content
 
-        # No tool calls needed - direct answer
-        print("No tool calls needed. Providing direct answer.")
+        # No tool called — direct answer
+        print("No tool called. Model answered directly.")
         return response_message.content
-    
+
     except Exception as e:
-        print(f"Error occurred: {e}")
+        return f"Error: {str(e)}"
 
 
+# ── Run ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("PAPERMIND v1 - Tool-Augmented RAG Agent")
-    print("=" * 25)
+    print("PaperMind V1 - Tool-augmented RAG Agent")
+    print("=" * 50)
+    print("Type 'q' to exit\n")
 
     while True:
         question = input("Ask a question (q to quit): ")
         if question.lower() == "q":
             break
         answer = ask_agent(question)
-        print(f"\nAnswer : \n{answer}")
- 
-
-
-    
-    
-
-
+        print(f"\nAnswer:\n{answer}")
+        print("=" * 50)
