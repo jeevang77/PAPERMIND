@@ -1,3 +1,8 @@
+# V0 - Naive RAG pipeline (deprecated in V1)
+# This file is kept for reference only.
+# Use agent.py for the current implementation
+
+
 import os
 from pathlib import Path
 
