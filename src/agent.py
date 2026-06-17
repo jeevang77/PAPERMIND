@@ -9,7 +9,6 @@ load_dotenv()
 # ── Setup ────────────────────────────────────────────────────────
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-vector_store = load_faiss()
 
 # ── Tool schema ──────────────────────────────────────────────────
 tools = [
@@ -36,7 +35,7 @@ tools = [
 ]
 
 # ── Actual function ──────────────────────────────────────────────
-def search_paper(query: str) -> str:
+def search_paper(query: str, vector_store) -> str:
     results = vector_store.similarity_search(query, k=3)
     if not results:
         return "No relevant information found in the paper."
@@ -48,26 +47,28 @@ def search_paper(query: str) -> str:
     return context
 
 # ── Agent function ───────────────────────────────────────────────
-def ask_agent(question: str) -> str:
+def ask_agent(question: str, vector_store) -> str:
     print(f"\nQuestion: {question}")
     print("-" * 50)
 
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a helpful research paper assistant. "
-                "You have access to a search_paper tool that searches an indexed research paper. "
-                "ALWAYS use the search_paper tool when the question is related to: "
-                "RAG, embeddings, transformers, LLMs, fine-tuning, chunking, "
-                "vector databases, or any technical topic that might be in the paper. "
-                "If the tool returns no relevant information, say: "
-                "'I could not find relevant information about this in the paper.' "
-                "Only answer directly WITHOUT the tool for completely unrelated questions "
-                "like math calculations or everyday questions. "
-                "Always cite page numbers when using tool results."
-            )
-        },
+       {
+    "role": "system",
+    "content": (
+        "You are a helpful research paper assistant. "
+        "A user has uploaded a document and you have access to the search_paper tool "
+        "that searches the content of that uploaded document. "
+        "ALWAYS use the search_paper tool for ANY question about: "
+        "- the document, paper, book, or file content "
+        "- the title, author, topic, or subject of the document "
+        "- summaries, explanations, or details from the document "
+        "- any specific information the user is asking about from the document "
+        "The ONLY time you should answer directly WITHOUT the tool is for "
+        "completely unrelated questions like math calculations or general knowledge "
+        "that have nothing to do with the uploaded document. "
+        "Always cite page numbers from tool results in your answer."
+    )
+},
         {
             "role": "user",
             "content": question
@@ -114,7 +115,8 @@ def ask_agent(question: str) -> str:
 
                 if function_name == "search_paper":
                     tool_result = search_paper(
-                        query=function_args.get("query")
+                        query=function_args.get("query"),
+                        vector_store= vector_store
                     )
                     if "No relevant information" in tool_result:
                         tool_result = "The paper does not contain relevant information about this topic."
@@ -146,7 +148,7 @@ def ask_agent(question: str) -> str:
 if __name__ == "__main__":
     print("PaperMind V1 - Tool-augmented RAG Agent")
     print("=" * 50)
-    print("Type 'q' to exit\n")
+    vs = load_faiss()
 
     while True:
         question = input("Ask a question (q to quit): ")
