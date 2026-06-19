@@ -1,6 +1,6 @@
 # PAPERMIND
 
-PAPERMIND is a personal **Research Paper Assistant** built to learn Retrieval-Augmented Generation (RAG). It loads a PDF, splits it into chunks, converts those chunks into embeddings, stores them in a FAISS vector index, retrieves relevant context for a question, and generates grounded answers with source citations.
+PAPERMIND is a personal **Research Paper Assistant** built to learn Retrieval-Augmented Generation (RAG). It loads a PDF, splits it into chunks, converts those chunks into embeddings, stores them in a FAISS vector index, retrieves relevant context for a question, and generates grounded answers with source citations.this file is only to explain the initial basic rag pipeline built. 
 
 ** refer to `journey.md` and tags for versions**
 
